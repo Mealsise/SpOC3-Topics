@@ -1401,33 +1401,6 @@ def set_expansion_bounds(udp, x_vals, y_vals, z_vals, xv_vals, yv_vals, zv_vals,
     udp.set_custom_bounds_switch(True)
 
 
-def generate_chromosomes_and_evaluate_fitness(factory: ChromosomeFactory, num_chromosomes: int = 100) -> list[float]:
-    """
-    Generates a set number of chromosomes using the ChromosomeFactory and evaluates their fitness.
-    
-    Args:
-        factory (ChromosomeFactory): The factory used to generate satellite configurations.
-        num_chromosomes (int): Number of chromosomes to generate and evaluate. Default is 100.
-    
-    Returns:
-        List[float]: A list of fitness values for each generated chromosome.
-    """
-    udp = factory.udp
-    fitness_list = []
-    
-    # Generate and evaluate chromosomes
-    for _ in range(num_chromosomes):
-        # Generate a chromosome (satellite configuration) from the factory
-        chromosome = factory()
-        
-        # Evaluate the fitness of the chromosome using the UDP
-        fitness = udp.fitness(chromosome)
-        
-        # Store the fitness result
-        fitness_list.append(fitness[0])
-    
-    return fitness_list
-
 
 
 
