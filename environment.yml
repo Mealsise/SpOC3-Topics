@@ -1,0 +1,17 @@
+name: satellite_optimisation
+channels:
+  - defaults
+  - conda-forge  # Access to a broader range of packages
+
+dependencies:
+  - python=3.9      # Python version
+  - pip             # Allows pip installations within Conda
+  - jupyter         # Jupyter Notebook functionality
+  - pygmo           # For evolutionary algorithms and optimization
+  - numpy           # Essential for numerical computations
+  - scipy           # Scientific computing library
+  - pillow          # Image processing (PIL is available as Pillow)
+  - matplotlib      # Plotting library
+
+  - pip:
+      - heyoka==3.2.0  # Exact version of heyoka required

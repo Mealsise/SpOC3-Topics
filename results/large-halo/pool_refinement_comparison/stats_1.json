@@ -1,0 +1,70 @@
+{
+  "metadata": {
+    "description": "Fitness statistics (min, max, median, etc.) for each pool method.",
+    "generated_from": "dad169124eaad864b8f21a2bb93bcc42",
+    "time_saved": "2024-10-28 22:51:40",
+    "metadata_id": "28f372cc74d47a185b088ed00a6892e2"
+  },
+  "results": [
+    [
+      "from-large-halo-alive-pool-500",
+      "-1.15705",
+      "-1.02736",
+      "-0.99405",
+      "-0.95717",
+      "-0.78822",
+      "-0.99100",
+      "0.05410"
+    ],
+    [
+      "from-large-halo-alive-pool-500-differentiated",
+      "-1.17965",
+      "-1.10113",
+      "-1.07852",
+      "-1.04402",
+      "-0.94408",
+      "-1.07310",
+      "0.03987"
+    ],
+    [
+      "from-large-halo-refined-500",
+      "-1.21654",
+      "-1.07615",
+      "-1.02736",
+      "-0.97383",
+      "-0.77632",
+      "-1.02262",
+      "0.07535"
+    ],
+    [
+      "from-large-halo-refined-500-differentiated",
+      "-1.24747",
+      "-1.15824",
+      "-1.12017",
+      "-1.07971",
+      "-0.92385",
+      "-1.11594",
+      "0.05788"
+    ],
+    [
+      "from-large-halo-refined-fill-factor-500",
+      "-0.98929",
+      "-0.79893",
+      "-0.74063",
+      "-0.68322",
+      "-0.34444",
+      "-0.73907",
+      "0.08874"
+    ],
+    [
+      "from-large-halo-refined-fill-factor-500-differentiated",
+      "-1.19988",
+      "-1.13682",
+      "-1.11303",
+      "-1.08804",
+      "-0.99524",
+      "-1.11204",
+      "0.03630"
+    ]
+  ]
+}

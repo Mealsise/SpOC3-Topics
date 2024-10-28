@@ -172,11 +172,59 @@ class orbital_golomb_array:
         # We construct the various STMs and reference trajectory
         self.ref_state, self.stms = stm_factory(ic, T, mu, n_meas, self.verbose)
 
+        self.use_custom_bounds = False
+        self.custom_lower_bounds = [-1.0] * self.n_sat * 3 + [-10.0] * self.n_sat * 3
+        self.custom_upper_bounds = [1.0] * self.n_sat * 3 + [10.0] * self.n_sat * 3
 
-    # Mandatory method in the UDP pygmo interface
-    # (returns the lower and upper bound of each component in the chromosome)
+    def set_custom_bounds_switch(self, tight: bool):
+        """
+        Enable or disable the use of tighter bounds.
+        
+        Args:
+            tight (bool): If True, use the tighter bounds. Otherwise, use default bounds.
+        """
+        self.use_custom_bounds = tight
+
+    def set_custom_bounds(self, lower_bounds: list[float], upper_bounds: list[float]):
+        """
+        Set custom bounds for optimization.
+        
+        Args:
+            lower_bounds (list[float]): Custom lower bounds.
+            upper_bounds (list[float]): Custom upper bounds.
+        """
+        self.custom_lower_bounds = []
+        self.custom_upper_bounds = []
+        for component in range(6):
+            self.custom_lower_bounds.extend([lower_bounds[component]] * self.n_sat)
+            self.custom_upper_bounds.extend([upper_bounds[component]] * self.n_sat)
+
+
     def get_bounds(self):
-        return ([-1.0] * self.n_sat * 3 + [-10.0] * self.n_sat * 3 , [1.0] * self.n_sat * 3 + [10.0] * self.n_sat * 3 )
+        """
+        Returns the lower and upper bounds for optimization. If satellites are locked, their bounds are constrained.
+        Returns:
+            tuple: Lower bounds and upper bounds for the decision variables.
+        """
+        if self.use_custom_bounds:
+            return self.custom_lower_bounds, self.custom_upper_bounds
+
+        lower_bounds = [-1.0] * self.n_sat * 3 + [-10.0] * self.n_sat * 3  # x, y, z and vx, vy, vz lower bounds
+        upper_bounds = [1.0] * self.n_sat * 3 + [10.0] * self.n_sat * 3  # x, y, z and vx, vy, vz upper bounds
+
+        return lower_bounds, upper_bounds
+
+    def lock_satellite(self, satellites_to_lock, current_config):
+        """
+        Locks the given satellites by setting their bounds to their current positions and velocities.
+        
+        Args:
+            satellites_to_lock (`list`): List of indices of satellites to lock.
+            current_config (`list`): The current configuration of positions and velocities for all satellites.
+        """
+        self.locked_satellites = satellites_to_lock
+        self.current_config = current_config  # Save the current configuration to lock satellites
+
 
     def get_nix(self):
         """
@@ -504,6 +552,345 @@ class orbital_golomb_array:
                     axs[k * self.n_meas + 2 + 3 * self.n_meas].set_title(f"fill factor = {f3:1.6f}", color="red")
 
         return [-min(fill_factor)] # Return worst of all three observations
+
+    def satellite_remaining(self, x):
+        """ Returns the number of remaining satellites for k=0, k=1, k=2 """
+
+        # 1) Decode the chromosomes into (x, y, z, vx, vy, vz) of the satellites.
+        N = self.n_sat
+        dx0 = np.array(
+            [(i, j, k, l, m, n) for (i, j, k, l, m, n) in zip(x[:N], 
+                                                            x[N:2 * N], 
+                                                            x[2 * N:3 * N],
+                                                            x[3 * N:4 * N],
+                                                            x[4 * N:5 * N],
+                                                            x[5 * N:])]
+        )
+        
+        # 2) Propagate the relative positions
+        rel_pos = []
+        for stm in self.stms:
+            d_ic = dx0 * self.scaling_factor
+            fc = propagate_formation(d_ic, stm)
+            rel_pos.append(fc / self.scaling_factor)
+        rel_pos = np.array(rel_pos)
+
+        # 3) Calculate the remaining satellites for k=0, k=1, k=2
+        remaining_satellites = []
+        for k in range(3):  # Loop only through k=0, k=1, k=2
+            points_3D = rel_pos[k]
+            if k != 0:
+                points_3D = points_3D / self.inflation_factor
+
+            # Removing points outside [-1, 1]
+            points_3D = points_3D[np.max(points_3D, axis=1) < 1]
+            points_3D = points_3D[np.min(points_3D, axis=1) > -1]
+
+            # Convert to grid positions
+            pos3D = (points_3D * self.grid_size / 2) + int(self.grid_size / 2)
+            pos3D = pos3D.astype(int)
+
+            # Count remaining satellites in the XY plane
+            I = np.zeros((self.grid_size, self.grid_size, self.grid_size))
+            for i, j, k_ in pos3D:
+                I[i, j, k_] = 1
+            xy = np.max(I, axis=2)
+            
+            # Append the count of remaining satellites
+            remaining_satellites.append(int(np.sum(xy)))
+
+        return remaining_satellites  # This will return [remaining_at_k0, remaining_at_k1, remaining_at_k2]
+
+    # def getRemaining(self, x):
+    #     """
+    #     Extracts the number of remaining satellites at each measurement point without plotting.
+    
+    #     Args:
+    #         x (`list` of length N): Chromosome contains initial relative positions and velocities of each satellite.
+    
+    #     Returns:
+    #         list: A list of integers representing the number of remaining satellites at each measurement point.
+    #     """
+    #     remaining_satellites = []
+    
+    #     # 1) Decode the chromosomes into (x, y, z, vx, vy, vz) of the satellites.
+    #     N = self.n_sat
+    #     dx0 = np.array(
+    #         [(i, j, k, l, m, n) for (i, j, k, l, m, n) in zip(x[:N], 
+    #                                                           x[N:2*N], 
+    #                                                           x[2*N:3*N],
+    #                                                           x[3*N:4*N],
+    #                                                           x[4*N:5*N],
+    #                                                           x[5*N:])]
+    #     )
+    
+    #     # 2) Propagate positions to the measurement points
+    #     rel_pos = []
+    #     for stm in self.stms:
+    #         d_ic = dx0 * self.scaling_factor
+    #         fc = propagate_formation(d_ic, stm)
+    #         rel_pos.append(fc / self.scaling_factor)
+    #     rel_pos = np.array(rel_pos)
+    
+    #     # 3) Compute the number of remaining satellites at each observation point
+    #     for k in range(self.n_meas):
+    #         points_3D = rel_pos[k]
+    
+    #         # Apply inflation factor if not the first measurement
+    #         if k != 0:
+    #             points_3D = points_3D / self.inflation_factor
+    
+    #         # Remove points outside the [-1,1] range
+    #         points_3D = points_3D[np.max(points_3D, axis=1) < 1]
+    #         points_3D = points_3D[np.min(points_3D, axis=1) > -1]
+    
+    #         # Count the remaining satellites
+    #         remaining_satellites.append(len(points_3D))
+    
+    #     return remaining_satellites
+
+
+    def getRemaining(self, x):
+        """ Returns the indices of remaining satellites for k=0, k=1, k=2 """
+
+        # 1) Decode the chromosomes into (x, y, z, vx, vy, vz) of the satellites.
+        N = self.n_sat
+        dx0 = np.array(
+            [(i, j, k, l, m, n) for (i, j, k, l, m, n) in zip(x[:N], 
+                                                            x[N:2 * N], 
+                                                            x[2 * N:3 * N],
+                                                            x[3 * N:4 * N],
+                                                            x[4 * N:5 * N],
+                                                            x[5 * N:])]
+        )
+        
+        BOUNDS = 0.9
+
+        # 2) Propagate the relative positions
+        rel_pos = []
+        for stm in self.stms:
+            d_ic = dx0 * self.scaling_factor
+            fc = propagate_formation(d_ic, stm)
+            rel_pos.append(fc / self.scaling_factor)
+        rel_pos = np.array(rel_pos)
+
+        # 3) Track the remaining satellite indices for k=0, k=1, k=2
+        remaining_indices = []
+        for k in range(3):  # Loop only through k=0, k=1, k=2
+            points_3D = rel_pos[k]
+            # print(points_3D)
+
+            if k != 0:
+                points_3D = points_3D / self.inflation_factor
+
+             # Manually filter satellites within the valid range in all dimensions (x, y, z)
+            valid_indices = []
+            for index, point in enumerate(points_3D):
+                # print(max(point))
+                if -1 <= point[0] <= 1 and -1 <= point[1] <= 1 and -1 <= point[2] <= 1:
+                    valid_indices.append(index)
+
+            # Append the valid satellite indices
+            remaining_indices.append(valid_indices)
+
+        return remaining_indices  # This will return [indices_at_k0, indices_at_k1, indices_at_k2]
+
+    def getLost(self, x):
+        """
+        Extracts the indices of the lost satellites at each measurement point.
+
+        Args:
+            x (`list` of length N): Chromosome contains initial relative positions and velocities of each satellite.
+
+        Returns:
+            list of lists: A list containing three lists, each with the indices of the satellites that are not remaining 
+            at the corresponding measurement point.
+        """
+        lost_satellites = []
+
+        # 1) Decode the chromosomes into (x, y, z, vx, vy, vz) of the satellites.
+        N = self.n_sat
+        dx0 = np.array(
+            [(i, j, k, l, m, n) for (i, j, k, l, m, n) in zip(x[:N], 
+                                                            x[N:2*N], 
+                                                            x[2*N:3*N],
+                                                            x[3*N:4*N],
+                                                            x[4*N:5*N],
+                                                            x[5*N:])]
+        )
+
+        # 2) Propagate positions to the measurement points
+        rel_pos = []
+        for stm in self.stms:
+            d_ic = dx0 * self.scaling_factor
+            fc = propagate_formation(d_ic, stm)
+            rel_pos.append(fc / self.scaling_factor)
+        rel_pos = np.array(rel_pos)
+
+        # 3) Find the lost satellites at each observation point
+        for k in range(self.n_meas):
+            points_3D = rel_pos[k]
+
+            # Apply inflation factor if not the first measurement
+            if k != 0:
+                points_3D = points_3D / self.inflation_factor
+
+            # Filter out satellites that are out of bounds [-1,1] in any of the axes
+            remaining_mask = (np.max(points_3D, axis=1) < 1) & (np.min(points_3D, axis=1) > -1)
+
+            # Get the indices of the remaining satellites
+            remaining_indices = np.where(remaining_mask)[0]
+
+            # Get the indices of lost satellites
+            all_indices = np.arange(N)
+            lost_indices = np.setdiff1d(all_indices, remaining_indices)
+
+            # Append lost indices to the list
+            lost_satellites.append(lost_indices.tolist())
+
+        return lost_satellites
+
+    def get_fill_factors(self, x):
+        """
+        Extracts the fill factors of the XY, XZ, and YZ planes for each observation point.
+
+        Args:
+            x (`list` of length N): Chromosome containing initial relative positions and velocities of each satellite.
+
+        Returns:
+            list: A list of 9 fill factors corresponding to the XY, XZ, and YZ planes for each observation point.
+                [XY0, XZ0, YZ0, XY1, XZ1, YZ1, XY2, XZ2, YZ2]
+        """
+        fill_factors = []
+
+        # 1) Decode the chromosomes into (x, y, z, vx, vy, vz) of the satellites.
+        N = self.n_sat
+        dx0 = np.array(
+            [(i, j, k, l, m, n) for (i, j, k, l, m, n) in zip(x[:N], 
+                                                            x[N:2*N], 
+                                                            x[2*N:3*N],
+                                                            x[3*N:4*N],
+                                                            x[4*N:5*N],
+                                                            x[5*N:])]
+        )
+
+        # 2) Propagate positions to the measurement points
+        rel_pos = []
+        for stm in self.stms:
+            d_ic = dx0 * self.scaling_factor
+            fc = propagate_formation(d_ic, stm)
+            rel_pos.append(fc / self.scaling_factor)
+        rel_pos = np.array(rel_pos)
+
+        # 3) Compute the fill factor for each observation
+        for k in range(self.n_meas):
+            points_3D = rel_pos[k]
+
+            # Apply inflation factor if not the first measurement
+            if k != 0:
+                points_3D = points_3D / self.inflation_factor
+
+            # Remove points outside the [-1,1] range
+            points_3D = points_3D[np.max(points_3D, axis=1) < 1]
+            points_3D = points_3D[np.min(points_3D, axis=1) > -1]
+
+            # Interpret now the 3D positions [-1,1] as points on a grid.
+            pos3D = (points_3D * self.grid_size / 2)
+            pos3D = pos3D + int(self.grid_size / 2)
+            pos3D = pos3D.astype(int)
+
+            # Create the 3D array
+            I = np.zeros((self.grid_size, self.grid_size, self.grid_size))
+            for i, j, k_ in pos3D:
+                I[i, j, k_] = 1
+
+            # Compute projections on XY, XZ, and YZ planes
+            xy = np.max(I, axis=(2,))
+            xz = np.max(I, axis=(1,))
+            yz = np.max(I, axis=(0,))
+
+            # Compute autocorrelations
+            xyC = scipy.signal.correlate(xy, xy, mode="full")
+            xzC = scipy.signal.correlate(xz, xz, mode="full")
+            yzC = scipy.signal.correlate(yz, yz, mode="full")
+
+            # Apply thresholds
+            xyC[abs(xyC) < 1e-8] = 0
+            xzC[abs(xzC) < 1e-8] = 0
+            yzC[abs(yzC) < 1e-8] = 0
+
+            # Compute fill factors
+            f1 = np.count_nonzero(xyC) / xyC.shape[0] / xyC.shape[1]
+            f2 = np.count_nonzero(xzC) / xzC.shape[0] / xzC.shape[1]
+            f3 = np.count_nonzero(yzC) / yzC.shape[0] / yzC.shape[1]
+
+            # Append the fill factors for XY, XZ, YZ for this observation
+            fill_factors.extend([f1, f2, f3])
+
+        return fill_factors
+
+
+
+    def get_positions_at_times_single_satellite(self, x):
+        """
+        Given the initial conditions x for a single satellite, returns its positions at t=0, t=1, and t=2 in x, y, z coordinates.
+
+        Args:
+            x (list or numpy array): Initial conditions [x0, y0, z0, vx0, vy0, vz0] for the satellite.
+
+        Returns:
+            numpy array: Positions at t=0, t=1, and t=2 for the satellite.
+                        Shape is (3, 3), where each row is [x, y, z] at a time.
+        """
+        # Ensure x is a numpy array
+        x = np.asarray(x)
+        # Reshape x into (1, 6) to make it compatible with existing functions
+        dx0 = x.reshape((1, 6))
+
+        # Propagate positions to each measurement time
+        positions = []
+        for idx, stm in enumerate(self.stms):
+            # Scale the initial conditions
+            d_ic = dx0 * self.scaling_factor
+            # Propagate the formation
+            fc = propagate_formation(d_ic, stm)
+            # Store positions (rescaled back)
+            pos = fc[0] / self.scaling_factor  # fc has shape (1, 3)
+            positions.append(pos)
+        positions_array = np.array(positions)  # Converts list of arrays to a 2D numpy array
+        return positions_array  # Now positions_array.shape == (3, 3)
+
+    def get_grid_positions_at_times_single_satellite(self, x):
+        """
+        Given the initial conditions x for a single satellite, returns its positions at t=0, t=1, and t=2 in terms of grid indices.
+
+        Args:
+            x (list or numpy array): Initial conditions [x0, y0, z0, vx0, vy0, vz0] for the satellite.
+
+        Returns:
+            List[List[int]]: Grid positions at t=0, t=1, and t=2 for the satellite.
+                            Each element is a list [i, j, k].
+                            If the satellite is out of bounds at a time, the element contains [None, None, None].
+        """
+        # Get the positions at times
+        positions_at_times = self.get_positions_at_times_single_satellite(x)  # positions_at_times is a numpy array of shape (3, 3)
+
+        grid_positions = []
+        for k, point_3D in enumerate(positions_at_times):
+            if k != 0:
+                point_3D = point_3D / self.inflation_factor
+
+            # Check if the satellite is within bounds [-1, 1]
+            if np.all(point_3D >= -1) and np.all(point_3D <= 1):
+                # Map position to grid index
+                pos3D = (point_3D * self.grid_size / 2) + int(self.grid_size / 2)
+                pos3D = pos3D.astype(int)
+                grid_positions.append(pos3D.tolist())  # Convert to list
+            else:
+                grid_positions.append([None, None, None])  # Use [None, None, None] instead of None
+        return grid_positions  # Return as list of lists
+
+
 
 
 ############### HARD problem configuration

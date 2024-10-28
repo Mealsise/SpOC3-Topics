@@ -1,0 +1,24 @@
+{
+  "metadata": {
+    "orbit": "large-dro",
+    "description": "Fitness values for from-pool-fitness-based-growing-subset selection.",
+    "num_chromosomes": 10,
+    "Time_taken": 153.52937579154968,
+    "satellite_pool_file": "large-dro-alive-pool-500",
+    "datetime": "2024-10-28 21:48:36",
+    "time_saved": "2024-10-28 21:48:36",
+    "metadata_id": "36f7c247501b36dce9053cee17985d69"
+  },
+  "results": [
+    -1.706722189173111,
+    -1.6531826293872696,
+    -1.6650803093396789,
+    -1.6864961332540154,
+    -1.6400951814396194,
+    -1.6722189173111244,
+    -1.676977989292088,
+    -1.6460440214158238,
+    -1.7019631171921477,
+    -1.6389054134443786
+  ]
+}

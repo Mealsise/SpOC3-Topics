@@ -1,0 +1,24 @@
+{
+  "metadata": {
+    "orbit": "large-halo",
+    "description": "Fitness values for from-pool-fitness-based-growing-subset selection.",
+    "num_chromosomes": 10,
+    "Time_taken": 150.29389643669128,
+    "satellite_pool_file": "large-halo-alive-pool-500",
+    "datetime": "2024-10-28 21:45:47",
+    "time_saved": "2024-10-28 21:45:47",
+    "metadata_id": "c2d458133fdbfc925db244ade7d15125"
+  },
+  "results": [
+    -1.367638310529447,
+    -1.3367043426531826,
+    -1.3509815585960738,
+    -1.3200475907198097,
+    -1.3426531826293875,
+    -1.34622248661511,
+    -1.3414634146341464,
+    -1.3509815585960738,
+    -1.3402736466389054,
+    -1.3569303985722783
+  ]
+}
